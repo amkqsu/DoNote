@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="fun.dogon.note.ReminderTests" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-09-15T23:55:18.802Z" hostname="localhost" time="0.117">
+  <properties/>
+  <testcase name="disabledIsNeverScheduled" classname="fun.dogon.note.ReminderTests" time="0.033"/>
+  <testcase name="leapDayRecoversInLeapYear" classname="fun.dogon.note.ReminderTests" time="0.008"/>
+  <testcase name="hourlyIntervals" classname="fun.dogon.note.ReminderTests" time="0.001"/>
+  <testcase name="futureTimestampsRemainReadable" classname="fun.dogon.note.ReminderTests" time="0.005"/>
+  <testcase name="oncePastIsDisabled" classname="fun.dogon.note.ReminderTests" time="0.001"/>
+  <testcase name="monthEndDoesNotDrift" classname="fun.dogon.note.ReminderTests" time="0.002"/>
+  <testcase name="rejectBadInterval" classname="fun.dogon.note.ReminderTests" time="0.017"/>
+  <testcase name="rejectEmptyWeekdays" classname="fun.dogon.note.ReminderTests" time="0.002"/>
+  <testcase name="rejectBadBackupHeader" classname="fun.dogon.note.ReminderTests" time="0.003"/>
+  <testcase name="cannotTriggerBeforeStart" classname="fun.dogon.note.ReminderTests" time="0.001"/>
+  <testcase name="explicitFutureDate" classname="fun.dogon.note.ReminderTests" time="0.001"/>
+  <testcase name="daylightSavingKeepsLocalHour" classname="fun.dogon.note.ReminderTests" time="0.003"/>
+  <testcase name="daysSkipWeekend" classname="fun.dogon.note.ReminderTests" time="0.036"/>
+  <testcase name="jsonRoundTrip" classname="fun.dogon.note.ReminderTests" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

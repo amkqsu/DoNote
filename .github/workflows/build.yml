@@ -1,0 +1,36 @@
+name: Build DoNote APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kodu al
+        uses: actions/checkout@v4
+
+      - name: JDK 17 kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: gradlew çalıştırılabilir yap
+        run: chmod +x gradlew
+
+      - name: İmzalama anahtarını geri getir
+        run: echo "${{ secrets.DONOTE_KEYSTORE_BASE64 }}" | base64 -d > donote-release.jks
+
+      - name: Release APK derle
+        env:
+          DONOTE_SIGN_PASSWORD: ${{ secrets.DONOTE_SIGN_PASSWORD }}
+        run: ./gradlew assembleRelease
+
+      - name: APK'yı yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: donote-release-apk
+          path: app/build/outputs/apk/release/*.apk

@@ -1,0 +1,13 @@
+DoNote 4.00 doğrulama kaydı
+
+Release APK derlemesi tamamlandı.
+Paket: fun.dogon.note
+Sürüm: 4.00 (40000)
+En düşük Android API: 26; hedef API: 35
+
+14 birim testi: 14 başarılı, 0 başarısız, 0 hata.
+Android Lint: 0 hata, 0 kritik hata, 64 uyarı.
+APK imzası apksigner ile doğrulandı; v2 imzası etkin.
+Manifestte INTERNET izni yok.
+
+Gerçek cihaz ve emülatör testleri tamamlanmadı. Biyometrik donanım, gerçek başlatıcı üzerinde widget ve Android sürümlerindeki bildirim teslim davranışı cihazda doğrulanmadı.
