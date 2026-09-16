@@ -12,8 +12,8 @@ import java.time.*
 import java.time.temporal.ChronoUnit
 
 val repeats=linkedMapOf("once" to "Tek sefer","hourly" to "Saatlik","daily" to "Günlük","weekly" to "Haftalık","monthly" to "Aylık","yearly" to "Yıllık","weekdays" to "Seçili günler")
-data class Reminder(val anchor:String,val repeat:String="once",val interval:Int=1,val weekdays:List<Int> = emptyList(),val enabled:Boolean=true) {
-    fun json()=JSONObject().put("anchor",anchor).put("repeat",repeat).put("interval",interval).put("weekdays",JSONArray(weekdays)).put("enabled",enabled).toString()
+data class Reminder(val anchor:String,val repeat:String="once",val interval:Int=1,val weekdays:List<Int> = emptyList(),val enabled:Boolean=true,val message:String="") {
+    fun json()=JSONObject().put("anchor",anchor).put("repeat",repeat).put("interval",interval).put("weekdays",JSONArray(weekdays)).put("enabled",enabled).put("message",message).toString()
     fun next(after:Long=System.currentTimeMillis(),zone:ZoneId=ZoneId.systemDefault()):Long? {
         if(!enabled)return null
         val start=LocalDateTime.parse(anchor);val now=Instant.ofEpochMilli(after).atZone(zone).toLocalDateTime()
@@ -28,7 +28,7 @@ data class Reminder(val anchor:String,val repeat:String="once",val interval:Int=
         repeat(4) { val candidate=start.plus(index*interval,units);if(epoch(candidate)>after)return epoch(candidate);index++ }
         return null
     }
-    companion object { fun parse(s:String):Reminder { val j=JSONObject(s);val anchor=j.getString("anchor");LocalDateTime.parse(anchor);val repeat=j.getString("repeat");require(repeat in repeats);val interval=j.optInt("interval",1);require(interval in 1..99);val a=j.optJSONArray("weekdays")?:JSONArray();val days=List(a.length()) { a.getInt(it) };require(days.all { it in 1..7 } && (repeat!="weekdays"||days.isNotEmpty()));return Reminder(anchor,repeat,interval,days,j.optBoolean("enabled",true)) } }
+    companion object { fun parse(s:String):Reminder { val j=JSONObject(s);val anchor=j.getString("anchor");LocalDateTime.parse(anchor);val repeat=j.getString("repeat");require(repeat in repeats);val interval=j.optInt("interval",1);require(interval in 1..99);val a=j.optJSONArray("weekdays")?:JSONArray();val days=List(a.length()) { a.getInt(it) };require(days.all { it in 1..7 } && (repeat!="weekdays"||days.isNotEmpty()));return Reminder(anchor,repeat,interval,days,j.optBoolean("enabled",true),j.optString("message").take(200)) } }
 }
 object ReminderEngine {
     fun allowed(c:Context)=Build.VERSION.SDK_INT<31 || c.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
@@ -45,8 +45,8 @@ object ReminderEngine {
         val manager=c.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel("notes","Not hatırlatmaları",NotificationManager.IMPORTANCE_HIGH))
         val click=PendingIntent.getActivity(c,0,Intent(c,MainActivity::class.java).setData(Uri.parse("donote://note/${n.id}")).putExtra("note",n.id),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val content=n.content();val title=if(n.mode!="none")"Kilitli not" else content.title.ifBlank { "DoNote hatırlatması" };val body=if(n.mode!="none")"Görüntülemek için kilidi açın." else content.plain().take(300)
-        val builder=NotificationCompat.Builder(c,"notes").setSmallIcon(R.drawable.ic_note).setContentTitle(title).setContentText(body).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setContentIntent(click).setAutoCancel(true).setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setColor(android.graphics.Color.parseColor(n.color))
+        val content=n.content();val reminder=runCatching { Reminder.parse(n.reminder) }.getOrNull();val title=if(n.mode!="none")"Kilitli not" else content.title.ifBlank { "Başlıksız not" };val defaultBody=if(n.mode!="none")"Görüntülemek için kilidi açın." else content.plain().lineSequence().firstOrNull { it.isNotBlank() }?.take(220)?:"Notunuzu kontrol etmeyi unutmayın.";val body=reminder?.message?.takeIf { it.isNotBlank() }?:defaultBody
+        val builder=NotificationCompat.Builder(c,"notes").setSmallIcon(R.drawable.ic_note).setContentTitle(title).setContentText(body).setStyle(NotificationCompat.BigTextStyle().setBigContentTitle(title).bigText(body)).setContentIntent(click).setAutoCancel(true).setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setPriority(NotificationCompat.PRIORITY_HIGH).setCategory(NotificationCompat.CATEGORY_REMINDER).setColor(android.graphics.Color.parseColor(n.color))
         if(n.icon.isNotEmpty())builder.setLargeIcon(iconBitmap(n.icon,n.color))
         runCatching { manager.notify(n.id,1,builder.build()) }
     }

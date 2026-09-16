@@ -38,7 +38,7 @@ class NoteWidget:AppWidgetProvider() {
             var count=0
             notes.forEach { n ->
                 if(count>=10)return@forEach
-                val header=RemoteViews(c.packageName,R.layout.widget_note_header);header.setTextViewText(R.id.item_title,n.content().title.ifBlank { "Başlıksız not" });header.setImageViewBitmap(R.id.item_icon,iconBitmap(n.icon.ifBlank { "note" },"#C7C7DB"));v.addView(R.id.widget_items,header);count++
+                if(notes.size>1){val header=RemoteViews(c.packageName,R.layout.widget_note_header);header.setTextViewText(R.id.item_title,n.content().title.ifBlank { "Başlıksız not" });header.setImageViewBitmap(R.id.item_icon,iconBitmap(n.icon.ifBlank { "note" },"#C7C7DB"));v.addView(R.id.widget_items,header);count++}
                 if(n.mode!="none") { val row=RemoteViews(c.packageName,R.layout.widget_text_row);row.setTextViewText(R.id.item_text,"Kilitli · Açmak için dokunun");v.addView(R.id.widget_items,row);count++ }
                 else {
                     val content=n.content();val blocks=content.blocks.filter { it.kind!="image"&&android.text.Html.fromHtml(it.html,android.text.Html.FROM_HTML_MODE_COMPACT).toString().isNotBlank() }

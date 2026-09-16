@@ -17,6 +17,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.*
@@ -84,7 +85,17 @@ class MainModel:ViewModel() {
 class MainActivity:ComponentActivity() {
     override fun attachBaseContext(base:android.content.Context) { val config=android.content.res.Configuration(base.resources.configuration);config.setLocale(java.util.Locale("tr","TR"));super.attachBaseContext(base.createConfigurationContext(config)) }
     lateinit var model:MainModel
-    override fun onCreate(state:Bundle?) { super.onCreate(state);Repo.init(this);enableEdgeToEdge();model=ViewModelProvider(this)[MainModel::class.java];if(state==null)handleIntent(intent);setContent { AppRoot(this,model) } }
+    override fun onCreate(state:Bundle?) { super.onCreate(state);Repo.init(this);enableEdgeToEdge();model=ViewModelProvider(this)[MainModel::class.java];if(state==null)handleIntent(intent);setContent { AppRoot(this,model) };requestInitialPermissions() }
+    private fun requestInitialPermissions() {
+        if(Repo.prefs.getBoolean("initialPermissionsAsked",false))return
+        if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED){requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),701);return}
+        requestExactAlarmPermission()
+    }
+    override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==701)requestExactAlarmPermission()}
+    private fun requestExactAlarmPermission() {
+        Repo.prefs.edit().putBoolean("initialPermissionsAsked",true).apply()
+        if(android.os.Build.VERSION.SDK_INT>=31){val alarm=getSystemService(android.app.AlarmManager::class.java);if(!alarm.canScheduleExactAlarms())runCatching{startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,android.net.Uri.parse("package:$packageName")))}}
+    }
     override fun onNewIntent(i:Intent) { super.onNewIntent(i);setIntent(i);handleIntent(i) }
     override fun onResume() { super.onResume();requestHighRefresh() }
     private fun handleIntent(i:Intent) { model.incoming=i.getStringExtra("note");if(i.action==Intent.ACTION_SEND&&i.type?.startsWith("text/")==true){val text=i.getStringExtra(Intent.EXTRA_TEXT).orEmpty();val subject=i.getStringExtra(Intent.EXTRA_SUBJECT).orEmpty();if(text.isNotBlank()||subject.isNotBlank())model.shareText=subject to text} }
@@ -98,7 +109,7 @@ class MainActivity:ComponentActivity() {
     val accent=remember(prefsVersion){Repo.str("accent","#c7c7db")};val animated=remember(prefsVersion){Repo.bool("animations",true)};val speed=remember(prefsVersion){Repo.str("animationSpeed","1.0").toFloatOrNull()?.coerceIn(0.5f,2f)?:1f}
     val scope=rememberCoroutineScope();val snackbar=remember { SnackbarHostState() };var unlock by remember { mutableStateOf<Note?>(null) };var action by remember { mutableStateOf<Note?>(null) };var copyAfter by remember { mutableStateOf(false) }
     fun message(s:String) { scope.launch { snackbar.showSnackbar(s) } }
-    fun copy(n:Note,c:Content=n.content()) { val clipboard=activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager;val clip=ClipData.newPlainText("DoNote",c.copyText());if(n.mode!="none"&&android.os.Build.VERSION.SDK_INT>=33)clip.description.extras=android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE",true) };clipboard.setPrimaryClip(clip);message("Not kopyalandı") }
+    fun copy(n:Note,c:Content=n.content()) { val clipboard=activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager;val clip=ClipData.newPlainText("DoNote",c.plain().ifBlank { c.title });if(n.mode!="none"&&android.os.Build.VERSION.SDK_INT>=33)clip.description.extras=android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE",true) };clipboard.setPrimaryClip(clip);message("Not kopyalandı") }
     fun open(n:Note,copyOnly:Boolean=false) { if(n.mode!="none") { unlock=n;copyAfter=copyOnly } else if(copyOnly)copy(n) else { model.editor=EditorState(n);scope.launch { Repo.dao.used(n.category) } } }
     fun remove(n:Note) { scope.launch { Repo.remove(n);if(snackbar.showSnackbar("Not silindi","Geri al",duration=SnackbarDuration.Long)==SnackbarResult.ActionPerformed)Repo.restore(n) } }
     LaunchedEffect(model.shareText) { model.shareText?.let { (subject,text) -> val previous=model.editor;if(previous!=null){previous.persist();if(!previous.saved){message(previous.savingError);return@LaunchedEffect};previous.key?.fill(0)};val html=TextUtils.htmlEncode(text).replace("\n","<br>");val body=if(text.isBlank())listOf(Block()) else listOf(Block(html=html));model.editor=EditorState(Note(payload=Content(subject,body).json()),initialContent=Content(subject,body));model.shareText=null } }
@@ -106,7 +117,7 @@ class MainActivity:ComponentActivity() {
     val e=model.editor
     SideEffect { if(e?.note?.mode!="none"&&e!=null || unlock!=null)activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
     NoteTheme(accent) {
-        Scaffold(snackbarHost={SnackbarHost(snackbar)},containerColor=Bg,contentWindowInsets=WindowInsets(0.dp,0.dp,0.dp,0.dp)) { insets ->
+        Scaffold(snackbarHost={DismissibleSnackbarHost(snackbar)},containerColor=Bg,contentWindowInsets=WindowInsets(0.dp,0.dp,0.dp,0.dp)) { insets ->
             Box(Modifier.fillMaxSize().padding(insets).imePadding().clipToBounds()) {
                 AnimatedContent(targetState=if(e!=null)"editor" else model.screen,transitionSpec={ if(animated)(fadeIn(animationSpec=androidx.compose.animation.core.tween((170/speed).toInt()))+slideInHorizontally(animationSpec=androidx.compose.animation.core.tween((190/speed).toInt())) { it/16 }) togetherWith fadeOut(animationSpec=androidx.compose.animation.core.tween((140/speed).toInt())) else EnterTransition.None togetherWith ExitTransition.None },label="ekran") { screen ->
                     when(screen) {
@@ -129,6 +140,14 @@ class MainActivity:ComponentActivity() {
         if(unlock!=null) UnlockDialog(activity,unlock!!,onDismiss={unlock=null},onUnlocked={c,key -> val n=unlock!!;unlock=null;if(copyAfter){copy(n,c);key.fill(0)}else {model.editor=EditorState(n,key,c);scope.launch { Repo.dao.used(n.category) }}})
     }
 }
+@Composable fun DismissibleSnackbarHost(hostState:SnackbarHostState) {
+    SnackbarHost(hostState) { data ->
+        var offset by remember(data){mutableFloatStateOf(0f)}
+        Box(Modifier.fillMaxWidth().padding(horizontal=12.dp).graphicsLayer { translationX=offset;alpha=(1f-(kotlin.math.abs(offset)/700f)).coerceIn(0.45f,1f) }.pointerInput(data) {
+            detectHorizontalDragGestures(onHorizontalDrag={change,amount->change.consume();offset+=amount},onDragEnd={if(kotlin.math.abs(offset)>size.width*0.22f)data.dismiss() else offset=0f},onDragCancel={offset=0f})
+        }) { Snackbar(snackbarData=data,containerColor=Raised,contentColor=Color(0xFFF5F5F7),actionColor=MaterialTheme.colorScheme.primary,dismissActionContentColor=Muted) }
+    }
+}
 @Composable fun ActionRow(label:String,icon:androidx.compose.ui.graphics.vector.ImageVector,action:()->Unit) { ListItem(headlineContent={Text(label)},leadingContent={Icon(icon,null)},modifier=Modifier.clickable(onClick=action),colors=ListItemDefaults.colors(containerColor=Color.Transparent)) }
 @Composable fun EmptyState(title:String,body:String,icon:androidx.compose.ui.graphics.vector.ImageVector) { Column(Modifier.fillMaxSize().padding(36.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally) { Icon(icon,null,Modifier.size(56.dp),tint=MaterialTheme.colorScheme.primary);Spacer(Modifier.height(20.dp));Text(title,style=MaterialTheme.typography.headlineSmall);Spacer(Modifier.height(10.dp));Text(body,color=Muted,style=MaterialTheme.typography.bodyMedium,textAlign=androidx.compose.ui.text.style.TextAlign.Center) } }
 @OptIn(ExperimentalMaterial3Api::class,ExperimentalFoundationApi::class)
@@ -149,7 +168,7 @@ class MainActivity:ComponentActivity() {
             LazyColumn(state=listState,contentPadding=PaddingValues(start=18.dp,end=18.dp,top=10.dp,bottom=100.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 items(local,key={it.id}) { n ->
                     var delta by remember { mutableFloatStateOf(0f) };val current by rememberUpdatedState(local)
-                    NoteCard(n,cats.find { it.id==n.category },onOpen={onOpen(n)},onCopy={onCopy(n)},onHold={onHold(n)},modifier=(if(animations)Modifier.animateItem()else Modifier).scale(if(dragging==n.id)1.02f else 1f).graphicsLayer { translationY=if(dragging==n.id)delta else 0f },trailing={
+                    NoteCard(n,cats.find { it.id==n.category },onOpen={onOpen(n)},onCopy={onCopy(n)},onHold={onHold(n)},modifier=(if(animations&&dragging==null)Modifier.animateItem()else Modifier).graphicsLayer { translationY=if(dragging==n.id)delta else 0f },trailing={
                         Icon(Icons.Outlined.DragIndicator,"Sıralamak için basılı tutup sürükle",tint=Muted,modifier=Modifier.size(42.dp).padding(9.dp).pointerInput(n.id,selected,query,filter) {
                             detectDragGesturesAfterLongPress(onDragStart={dragging=n.id;delta=0f},onDragEnd={dragging=null;val saved=current;scope.launch { val orderedIds=saved.map { it.id }.toSet();val slots=notes.filter { it.id in orderedIds }.map { it.position }.sorted();Repo.dao.putAll(saved.mapIndexed { index,item -> item.copy(position=slots[index]) }) }},onDragCancel={dragging=null;local=visible},onDrag={change,amount ->
                                 change.consume();delta+=amount.y;val idx=current.indexOfFirst { it.id==n.id };val item=listState.layoutInfo.visibleItemsInfo.find { it.key==n.id };val threshold=(item?.size?:120)*0.6f
@@ -167,17 +186,19 @@ class MainActivity:ComponentActivity() {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable fun NoteCard(n:Note,cat:Category?,onOpen:()->Unit,onCopy:()->Unit,onHold:()->Unit,modifier:Modifier=Modifier,trailing:@Composable ()->Unit={}) {
     val c=remember(n.payload,n.mode){n.content()};var now by remember { mutableLongStateOf(System.currentTimeMillis()) };LaunchedEffect(n.updated){while(true){now=System.currentTimeMillis();delay(60000)}}
-    Surface(modifier.fillMaxWidth(),color=SurfaceColor,shape=RoundedCornerShape(22.dp),border=BorderStroke(1.dp,Line)) { Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-        Column(Modifier.weight(1f).combinedClickable(onClick=onOpen,onLongClick=onHold).padding(16.dp)) {
-            Row(verticalAlignment=Alignment.CenterVertically) { if(n.icon.isNotBlank()) { Icon(noteIcon(n.icon),null,tint=hexColor(n.color),modifier=Modifier.size(23.dp));Spacer(Modifier.width(10.dp)) };Text(c.title.ifBlank { "Başlıksız not" },style=MaterialTheme.typography.titleMedium,modifier=Modifier.weight(1f),maxLines=2,overflow=TextOverflow.Ellipsis);if(n.pinned)Icon(Icons.Outlined.PushPin,"Sabitlenmiş",Modifier.size(16.dp),tint=Muted);if(n.mode!="none")Icon(Icons.Outlined.Lock,"Kilitli",Modifier.size(16.dp),tint=Muted) }
-            Spacer(Modifier.height(9.dp));Text(if(n.mode!="none")"İçeriği görmek için kilidi açın" else c.plain().ifBlank { "Henüz içerik yok" },color=Muted,maxLines=3,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(9.dp));Row(verticalAlignment=Alignment.CenterVertically) {
-                if(cat!=null)Row(verticalAlignment=Alignment.CenterVertically,modifier=Modifier.background(hexColor(cat.color).copy(alpha=0.1f),RoundedCornerShape(6.dp)).padding(horizontal=8.dp,vertical=4.dp)){Icon(noteIcon(cat.icon),null,Modifier.size(14.dp),tint=hexColor(cat.color));Spacer(Modifier.width(5.dp));Text(cat.name,color=hexColor(cat.color),style=MaterialTheme.typography.labelSmall)}
-                Spacer(Modifier.width(8.dp));Text(relativeTime(n.updated,now),style=MaterialTheme.typography.labelSmall,color=Muted,modifier=Modifier.weight(1f));if(n.reminder.isNotBlank())Icon(Icons.Outlined.NotificationsNone,"Hatırlatma",Modifier.size(16.dp),tint=Muted);IconButton(onClick=onCopy,modifier=Modifier.size(44.dp)){Icon(Icons.Outlined.ContentCopy,"Notu kopyala",Modifier.size(19.dp))}
+    Surface(modifier.fillMaxWidth(),color=SurfaceColor,shape=RoundedCornerShape(22.dp),border=BorderStroke(1.dp,Line)) {
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).combinedClickable(onClick=onOpen,onLongClick=onHold).padding(start=16.dp,top=16.dp,bottom=16.dp,end=6.dp)) {
+                Row(verticalAlignment=Alignment.CenterVertically) { if(n.icon.isNotBlank()) { Icon(noteIcon(n.icon),null,tint=hexColor(n.color),modifier=Modifier.size(23.dp));Spacer(Modifier.width(10.dp)) };Text(c.title.ifBlank { "Başlıksız not" },style=MaterialTheme.typography.titleMedium,modifier=Modifier.weight(1f),maxLines=2,overflow=TextOverflow.Ellipsis);if(n.pinned)Icon(Icons.Outlined.PushPin,"Sabitlenmiş",Modifier.size(16.dp),tint=Muted);if(n.mode!="none")Icon(Icons.Outlined.Lock,"Kilitli",Modifier.size(16.dp),tint=Muted) }
+                Spacer(Modifier.height(9.dp));Text(if(n.mode!="none")"İçeriği görmek için kilidi açın" else c.plain().ifBlank { "Henüz içerik yok" },color=Muted,maxLines=3,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(9.dp));Row(verticalAlignment=Alignment.CenterVertically) {
+                    if(cat!=null)Row(verticalAlignment=Alignment.CenterVertically,modifier=Modifier.background(hexColor(cat.color).copy(alpha=0.1f),RoundedCornerShape(6.dp)).padding(horizontal=8.dp,vertical=4.dp)){Icon(noteIcon(cat.icon),null,Modifier.size(14.dp),tint=hexColor(cat.color));Spacer(Modifier.width(5.dp));Text(cat.name,color=hexColor(cat.color),style=MaterialTheme.typography.labelSmall)}
+                    Spacer(Modifier.width(8.dp));Text(relativeTime(n.updated,now),style=MaterialTheme.typography.labelSmall,color=Muted);if(n.reminder.isNotBlank()){Spacer(Modifier.width(7.dp));Icon(Icons.Outlined.NotificationsNone,"Hatırlatma",Modifier.size(16.dp),tint=Color.White)}
+                }
             }
+            Column(Modifier.width(52.dp).padding(end=6.dp),horizontalAlignment=Alignment.CenterHorizontally) { Box{trailing()};IconButton(onClick=onCopy,modifier=Modifier.size(42.dp)){Icon(Icons.Outlined.ContentCopy,"Not içeriğini kopyala",Modifier.size(19.dp))} }
         }
-        Box(Modifier.padding(end=6.dp)){trailing()}
-    } }
+    }
 }
 fun relativeTime(time:Long,now:Long=System.currentTimeMillis()):String { val minutes=((now-time).coerceAtLeast(0)/60000);return when {minutes<1->"Az önce";minutes<60->"$minutes dk önce";minutes<1440->"${minutes/60} saat önce";else->"${minutes/1440} gün önce"} }
 @Composable fun UnlockDialog(activity:Activity,n:Note,onDismiss:()->Unit,onUnlocked:(Content,ByteArray)->Unit) {

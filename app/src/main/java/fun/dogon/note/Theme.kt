@@ -24,7 +24,7 @@ val Muted = Color(0xFF99999F)
 val Accent = Color(0xFFC7C7DB)
 fun hexColor(s: String) = Color(android.graphics.Color.parseColor(s))
 fun contrast(c: Color) = if((c.red * 0.299f + c.green * 0.587f + c.blue * 0.114f) > 0.6f) Color(0xFF20202B) else Color.White
-val palette = listOf("#c7c7db","#f5f5f7","#91cea6","#edc766","#ef9096","#90bdf0","#b49cf0","#edac7f","#65cabe")
+val palette = listOf("#c7c7db","#f5f5f7","#91cea6","#edc766","#ef9096","#90bdf0","#b49cf0","#edac7f","#65cabe","#ff4fb8")
 @Composable fun NoteTheme(accent: String = "#c7c7db",content: @Composable () -> Unit) {
     val a = hexColor(if(validColor(accent)) accent else "#c7c7db")
     MaterialTheme(colorScheme = darkColorScheme(primary = a,onPrimary = contrast(a),secondary = a,background = Bg,onBackground = Color(0xFFF5F5F7),surface = SurfaceColor,onSurface = Color(0xFFF5F5F7),surfaceVariant = Raised,onSurfaceVariant = Muted,outline = Line,error = Color(0xFFEF9096)),shapes = Shapes(small = RoundedCornerShape(13.dp),medium = RoundedCornerShape(15.dp),large = RoundedCornerShape(22.dp)),typography = Typography(headlineLarge = TextStyle(fontFamily = FontFamily.SansSerif,fontSize = 29.sp,fontWeight = FontWeight.Bold,letterSpacing = (-1.4).sp),headlineSmall = TextStyle(fontSize = 24.sp,fontWeight = FontWeight.SemiBold,letterSpacing = (-0.7).sp),titleMedium = TextStyle(fontSize = 18.sp,fontWeight = FontWeight.SemiBold),bodyMedium = TextStyle(fontSize = 14.sp),labelSmall = TextStyle(fontSize = 12.sp)),content = content)
