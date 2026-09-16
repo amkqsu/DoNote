@@ -91,7 +91,7 @@ class MainActivity:ComponentActivity() {
         if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED){requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),701);return}
         requestExactAlarmPermission()
     }
-    override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==701)requestExactAlarmPermission()}
+    override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<String>,grantResults:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==701)requestExactAlarmPermission()}
     private fun requestExactAlarmPermission() {
         Repo.prefs.edit().putBoolean("initialPermissionsAsked",true).apply()
         if(android.os.Build.VERSION.SDK_INT>=31){val alarm=getSystemService(android.app.AlarmManager::class.java);if(!alarm.canScheduleExactAlarms())runCatching{startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,android.net.Uri.parse("package:$packageName")))}}
