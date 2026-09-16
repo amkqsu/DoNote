@@ -22,7 +22,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: İmzalama anahtarını geri getir
-        run: printf '%s' "${{ secrets.DONOTE_KEYSTORE_BASE64 }}" | base64 -d --ignore-garbage > donote-release.jks
+        run: echo "${{ secrets.DONOTE_KEYSTORE_BASE64 }}" | base64 -d > donote-release.jks
 
       - name: Release APK derle
         env:

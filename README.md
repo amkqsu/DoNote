@@ -1,47 +1,35 @@
 # DoNote 4.00
 
-Türkçe native Android not uygulaması. Paket: `fun.dogon.note`. Android 8.0 ve sonrası. Kotlin, Jetpack Compose ve Room. DoFit tema kaynaklarındaki renk, yazı tipi ve kart biçimleri kullanılır. Uygulama internet izni istemez.
+DoNote, tamamen yerel çalışan Android not uygulamasıdır.
 
 ## Özellikler
 
-- Arama, yatay kategori sekmeleri, her kartta kopyalama ikonu ve sabit ekleme düğmesi.
-- Kalın, italik, altı/üstü çizili metin; yapılacaklar, resimler, bağlantılar, başlıklar, maddeler ve alıntılar.
-- Otomatik kayıt, düzenleyicide geri al/yinele, basılı tutma menüsü, sürükleyerek sıralama, sabitleme ve silmede geri alma.
-- Düzenlenebilir kategoriler, renkler, öne çıkan kategori ve isteğe bağlı kullanım sırası.
-- Hazır 24 ikon, renk seçimi ve ikonsuz notlar. İkon widget ve bildirimlerde de görünür.
-- Not başına PIN, uygun cihazlarda güçlü biyometri ve kurtarma PIN'i.
-- Yalnızca Ayarlar'dan erişilen arşiv.
-- 24 saat biçiminde tek seferlik, saatlik, günlük, haftalık, aylık, yıllık ve seçili günlerde hatırlatma.
-- Seçilebilir ve yeniden boyutlandırılabilir Android widget'ı.
-- Not, gömülü resim, kategori ve tercihleri içeren JSON yedeği. Mevcut notlar korunur; aynı kimlikli notlar atlanır.
-- İsteğe bağlı sayaç, hızlı filtreler, animasyonlar ve vurgu rengi.
+- Kotlin + Jetpack Compose arayüz.
+- Room tabanlı yerel veritabanı.
+- Metin, yapılacak, başlık, madde, alıntı ve resim blokları.
+- Kategori renkleri ve geniş ikon kütüphanesi.
+- Özel renk seçici.
+- Not içinde arama ve panodan hızlı yapıştırma.
+- Android paylaş menüsünden DoNote'a metin gönderme.
+- JSON içe/dışa aktarma.
+- Hatırlatmalar.
+- Tek veya çoklu not gösterebilen yeniden yapılandırılabilir widget.
+- Widget üzerinden yapılacak maddelerini işaretleme.
+- PIN ile not kilitleme ve isteğe bağlı ortak varsayılan PIN.
+- Yüksek yenileme hızlı ekranlarda cihazın desteklediği en yüksek aynı çözünürlüklü görüntü modunu isteme.
+- Hafif geçiş animasyonları ve ayarlanabilir animasyon hızı.
 
-Metni biçimlendirmek için önce metni seçin, ardından alttaki yatay araç çubuğunu kullanın. Kartın sağındaki tutamacı basılı tutup sürükleyerek sırayı değiştirin. Sabitlenmiş notlar kendi grubunda sıralanır. Kopyalama, başlık ve içeriği düz metin olarak aktarır; resimler `[Resim]` olarak gösterilir.
+## Kilit sistemi
 
-## Gizlilik ve sınırlar
+Kilitli not içeriği AES-256-GCM ile şifrelenir. 6–12 rakamlı PIN, PBKDF2-HMAC-SHA256 ile not anahtarını korur. Ayarlardaki varsayılan PIN Android Keystore ile cihaz üzerinde şifreli biçimde saklanır. Her not için varsayılan PIN veya ayrı bir PIN seçilebilir.
 
-Kilitli notların başlığı, içeriği ve resimleri AES-256-GCM ile şifrelenir. 6–12 rakamlı PIN, 210.000 turlu PBKDF2-HMAC-SHA256 ile not anahtarını korur. Biyometrik anahtar Android Keystore'dadır. PIN unutulursa içerik kurtarılamaz. Beş hatalı girişten sonra 30 saniye bekleme uygulanır.
-
-Kilitli içerik arama, kart, widget ve bildirim önizlemesinde gösterilmez. Uygulama arka plana geçince kilit yeniden devreye girer; uygulamanın başlattığı resim seçimi sırasında düzenleme oturumu korunur. Bulut yedeği kapalıdır. Uygulamayı kaldırmak yerel verileri siler.
-
-JSON'da kilitli notlar şifreli, diğerleri okunabilir biçimdedir. Başka cihazda biyometri yeniden etkinleştirilir; PIN korunur. Hazır ikon kütüphanesi aktarılmaz, yalnızca seçilen ikon kimliği korunur. Yedek en fazla 64 MB, 5000 not ve 200 kategori olabilir. Not başına 500 bölüm, 12 resim ve resimli içerikte 24 MB sınırı vardır. Resimler en fazla 1600 piksel boyutunda JPEG'e çevrilir, kamera yönü düzeltilir; resim başına 3 MB sınırı vardır.
-
-Bildirim izni ve Android 12+ tam alarm erişimi kullanıcı tarafından verilmelidir. Tam alarm izni yoksa Android bildirimi geciktirebilir. Aylık eksik günler ayın sonuna uyarlanır; sonraki ay asıl güne dönülür. Arşivlenen notlarda alarmlar duraklar. Zorla durdurulan uygulamanın hatırlatmaları yeniden açılana kadar çalışmaz; cihaz kapalıyken bildirim üretilemez.
+PIN unutulursa ayrı PIN ile kilitlenmiş notun içeriği kurtarılamaz. Kilitli içerik kart, arama, widget ve bildirim önizlemelerinde gösterilmez.
 
 ## Derleme
 
-JDK 17, Android SDK Platform 35 ve Build Tools 35.0.0 gereklidir. Gradle 8.13, AGP 8.9.1 ve Kotlin 2.0.21 sabitlenmiştir. Projeyi Android Studio'da açın veya `ANDROID_HOME` tanımlayın. Yerel SDK yolu arşive konulmaz.
+JDK 17 gerekir. Release imzası için GitHub Actions secrets:
 
-```bash
-./gradlew assembleDebug testDebugUnitTest
-```
+- `DONOTE_KEYSTORE_BASE64`
+- `DONOTE_SIGN_PASSWORD`
 
-Release için `DONOTE_SIGN_PASSWORD` ortam değişkenini `signing-password.txt` içindeki değere ayarlayın:
-
-```bash
-./gradlew assembleRelease lintRelease
-```
-
-Bu özel arşiv `donote-release.jks` ve imzalama parolasını içerir. Güncellemelerin aynı uygulama üzerine kurulabilmesi için saklayın; herkese açık repoya yüklemeyin. `.gitignore` bu özel dosyaları dışlar.
-
-Cihaz testleri `app/src/androidTest` içindedir; test kayıtları oluşturup siler, yalnızca test cihazında çalıştırılmalıdır. Doğrulamanın kapsamı `verification/validation.txt` dosyasındadır.
+Uygulama kimliği: `fun.dogon.note`

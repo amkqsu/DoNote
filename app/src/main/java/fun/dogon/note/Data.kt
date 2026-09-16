@@ -25,11 +25,11 @@ data class Content(val title: String = "", val blocks: List<Block> = listOf(Bloc
 @Entity(tableName="notes")
 data class Note(@PrimaryKey val id: String = uid(), val payload: String = Content().json(), val category: String = "personal", val icon: String = "note", val color: String = "#c7c7db", val created: Long = System.currentTimeMillis(), val updated: Long = System.currentTimeMillis(), val position: Long = System.currentTimeMillis(), val pinned: Boolean = false, val archived: Boolean = false, val mode: String = "none", val salt: String = "", val wrapped: String = "", val bio: String = "", val reminder: String = "") {
     fun content() = if(mode == "none") runCatching { Content.parse(payload) }.getOrDefault(Content()) else Content("Kilitli not", emptyList())
-    fun json() = JSONObject().put("id",id).put("payload",payload).put("category",category).put("icon",icon).put("color",color).put("created",created).put("updated",updated).put("position",position).put("pinned",pinned).put("archived",archived).put("mode",if(mode=="none") "none" else "pin").put("salt",salt).put("wrapped",wrapped).put("reminder",reminder)
+    fun json() = JSONObject().put("id",id).put("payload",payload).put("category",category).put("icon",icon).put("color",color).put("created",created).put("updated",updated).put("position",position).put("pinned",pinned).put("archived",archived).put("mode",mode).put("salt",salt).put("wrapped",wrapped).put("reminder",reminder)
 }
 @Entity(tableName="categories")
-data class Category(@PrimaryKey val id: String = uid(), val name: String, val color: String = "#c7c7db", val position: Int = 0, val uses: Int = 0) {
-    fun json() = JSONObject().put("id",id).put("name",name).put("color",color).put("position",position).put("uses",uses)
+data class Category(@PrimaryKey val id: String = uid(), val name: String, val color: String = "#c7c7db", val position: Int = 0, val uses: Int = 0, val icon: String = "note") {
+    fun json() = JSONObject().put("id",id).put("name",name).put("color",color).put("position",position).put("uses",uses).put("icon",icon)
 }
 @Dao interface NoteDao {
     @Query("SELECT * FROM notes ORDER BY pinned DESC, position ASC") fun observe(): Flow<List<Note>>
@@ -45,7 +45,7 @@ data class Category(@PrimaryKey val id: String = uid(), val name: String, val co
     @Query("UPDATE notes SET category = :replacement WHERE category = :id") suspend fun reassign(id: String,replacement: String)
     @Query("DELETE FROM categories WHERE id = :id") suspend fun deleteCat(id: String)
 }
-@Database(entities=[Note::class,Category::class],version=1,exportSchema=false)
+@Database(entities=[Note::class,Category::class],version=2,exportSchema=false)
 abstract class NoteDb: RoomDatabase() { abstract fun dao(): NoteDao }
 class NoteApp: Application() { override fun onCreate() { super.onCreate();Repo.init(this) } }
 object Repo {
@@ -56,8 +56,8 @@ object Repo {
     val dao get()=db.dao()
     val prefs get()=context.getSharedPreferences("preferences",Context.MODE_PRIVATE)
     val revision=MutableStateFlow(0)
-    fun init(c: Context) { if(::db.isInitialized)return;context=c.applicationContext;db=Room.databaseBuilder(context,NoteDb::class.java,"donote.db").setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE).addCallback(object:androidx.room.RoomDatabase.Callback(){ override fun onOpen(db:androidx.sqlite.db.SupportSQLiteDatabase){db.query("PRAGMA secure_delete=ON").use { }} }).build();scope.launch { runCatching { if(dao.cats().isEmpty()) defaults().forEach { dao.cat(it) };ReminderEngine.restore(context) }.onFailure { android.util.Log.e("DoNote","Başlangıç görevi hata verdi",it) } } }
-    fun defaults()=listOf("work" to "İş","ideas" to "Fikir","personal" to "Kişisel","shopping" to "Alışveriş","health" to "Sağlık","education" to "Eğitim","other" to "Diğer").mapIndexed { i,p -> Category(p.first,p.second,palette[i],i) }
+    fun init(c: Context) { if(::db.isInitialized)return;context=c.applicationContext;val migration=object:androidx.room.migration.Migration(1,2){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("ALTER TABLE categories ADD COLUMN icon TEXT NOT NULL DEFAULT 'note'");db.execSQL("UPDATE categories SET icon='work' WHERE id='work'");db.execSQL("UPDATE categories SET icon='idea' WHERE id='ideas'");db.execSQL("UPDATE categories SET icon='person' WHERE id='personal'");db.execSQL("UPDATE categories SET icon='cart' WHERE id='shopping'");db.execSQL("UPDATE categories SET icon='heart' WHERE id='health'");db.execSQL("UPDATE categories SET icon='book' WHERE id='education'")}};db=Room.databaseBuilder(context,NoteDb::class.java,"donote.db").addMigrations(migration).setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE).addCallback(object:androidx.room.RoomDatabase.Callback(){ override fun onOpen(db:androidx.sqlite.db.SupportSQLiteDatabase){db.query("PRAGMA secure_delete=ON").use { }} }).build();scope.launch { runCatching { if(dao.cats().isEmpty()) defaults().forEach { dao.cat(it) };dao.all().filter { it.mode !in listOf("none","pin","default") }.forEach { dao.put(it.copy(mode="pin",bio="")) };ReminderEngine.restore(context) }.onFailure { android.util.Log.e("DoNote","Başlangıç görevi hata verdi",it) } } }
+    fun defaults()=listOf(arrayOf("work","İş","work"),arrayOf("ideas","Fikir","idea"),arrayOf("personal","Kişisel","person"),arrayOf("shopping","Alışveriş","cart"),arrayOf("health","Sağlık","heart"),arrayOf("education","Eğitim","book"),arrayOf("other","Diğer","note")).mapIndexed { i,p -> Category(p[0],p[1],palette[i],i,0,p[2]) }
     fun bool(k:String,default:Boolean=false)=prefs.getBoolean(k,default)
     fun str(k:String,default:String="")=prefs.getString(k,default)?:default
     fun setting(k:String,v:Boolean) { prefs.edit().putBoolean(k,v).apply();revision.value++ }
@@ -66,7 +66,7 @@ object Repo {
     suspend fun remove(n:Note) { dao.delete(n.id);ReminderEngine.cancel(context,n.id);NoteWidget.refresh(context) }
     suspend fun restore(n:Note) { save(n) }
     suspend fun deleteCategory(c:Category) { db.withTransaction { dao.reassign(c.id,"other");dao.deleteCat(c.id) } }
-    suspend fun export():String = db.withTransaction { JSONObject().put("format","DoNote").put("schema",1).put("version","4.00").put("notes",JSONArray(dao.all().map { it.json() })).put("categories",JSONArray(dao.cats().map { it.json() })).put("settings",JSONObject().put("autoOrder",bool("autoOrder")).put("featured",str("featured")).put("counter",bool("counter",true)).put("filters",bool("filters",true)).put("animations",bool("animations",true)).put("accent",str("accent","#c7c7db"))).toString(2) }
+    suspend fun export():String = db.withTransaction { JSONObject().put("format","DoNote").put("schema",1).put("version","4.00").put("notes",JSONArray(dao.all().map { it.json() })).put("categories",JSONArray(dao.cats().map { it.json() })).put("settings",JSONObject().put("autoOrder",bool("autoOrder")).put("featured",str("featured")).put("counter",bool("counter",true)).put("filters",bool("filters",true)).put("animations",bool("animations",true)).put("animationSpeed",str("animationSpeed","1.0")).put("accent",str("accent","#c7c7db"))).toString(2) }
     suspend fun import(raw:String):Pair<Int,Int> {
         val backup=Backup.parse(raw)
         var added=0;var skipped=0
@@ -79,10 +79,10 @@ object Repo {
                     dao.cat(new);cats.add(new);mapping[incoming.id]=new.id
                 }
             }
-            backup.notes.forEach { n -> if(n.id in existing) skipped++ else { dao.put(n.copy(category=mapping[n.category]?:"other",bio="",mode=if(n.mode=="none") "none" else "pin"));added++ } }
+            backup.notes.forEach { n -> if(n.id in existing) skipped++ else { dao.put(n.copy(category=mapping[n.category]?:"other",bio="",mode=if(n.mode=="biometric") "pin" else n.mode));added++ } }
         }
         val s=backup.settings
-        listOf("autoOrder","counter","filters","animations").forEach { if(s.has(it)) setting(it,s.getBoolean(it)) }
+        listOf("autoOrder","counter","filters","animations").forEach { if(s.has(it)) setting(it,s.getBoolean(it)) };if(s.has("animationSpeed"))setting("animationSpeed",s.optString("animationSpeed","1.0"))
         if(validColor(s.optString("accent")))setting("accent",s.getString("accent"))
         val featured=s.optString("featured");if(dao.cats().any { it.id==featured })setting("featured",featured)
         ReminderEngine.restore(context);NoteWidget.refresh(context)
@@ -96,11 +96,11 @@ data class Backup(val notes:List<Note>,val categories:List<Category>,val setting
             val j=JSONObject(raw);require(j.optString("format")=="DoNote" && j.optInt("schema")==1) { "Geçerli bir DoNote JSON yedeği seçin." }
             val a=j.getJSONArray("notes");val c=j.getJSONArray("categories");require(a.length()<=5000 && c.length() in 1..200) { "Yedek sınırı: 5000 not ve 200 kategori." }
             val ids=mutableSetOf<String>()
-            val cats=List(c.length()) { i -> val x=c.getJSONObject(i);val id=x.getString("id");require(id.length in 1..80 && ids.add(id));val name=x.getString("name");val color=x.getString("color");require(name.isNotBlank()&&name.length<=60&&validColor(color));Category(id,name,color,i,x.optInt("uses").coerceIn(0,1000000)) }
+            val cats=List(c.length()) { i -> val x=c.getJSONObject(i);val id=x.getString("id");require(id.length in 1..80 && ids.add(id));val name=x.getString("name");val color=x.getString("color");require(name.isNotBlank()&&name.length<=60&&validColor(color));Category(id,name,color,i,x.optInt("uses").coerceIn(0,1000000),x.optString("icon","note").takeIf { it in iconKeys }?:"note") }
             ids.clear()
             val notes=List(a.length()) { i ->
                 val x=a.getJSONObject(i);val id=x.getString("id");require(Regex("[a-zA-Z0-9-]{1,80}").matches(id)&&ids.add(id)) { "Tekrarlanan veya geçersiz not kimliği." }
-                val mode=x.getString("mode");require(mode in listOf("none","pin"));val payload=x.getString("payload");require(payload.length<=24*1024*1024)
+                val mode=x.getString("mode");require(mode in listOf("none","pin","default","biometric"));val payload=x.getString("payload");require(payload.length<=24*1024*1024)
                 if(mode=="none") validateContent(Content.parse(payload)) else { require(Vault.bytes(x.getString("salt")).size==16 && Vault.bytes(x.getString("wrapped")).size==60 && Vault.bytes(payload).size>=28) }
                 val icon=x.optString("icon");require(icon in iconKeys || icon.isEmpty());val color=x.optString("color");require(validColor(color))
                 val reminder=x.optString("reminder");if(reminder.isNotBlank()) Reminder.parse(reminder)
